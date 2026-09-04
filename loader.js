@@ -1,5 +1,5 @@
 async function loadText(path) {
-  const response = await fetch(`/${path}?v=4`, { cache: 'no-store' });
+  const response = await fetch(`/${path}?v=5`, { cache: 'no-store' });
   if (!response.ok) throw new Error(`Failed to load ${path}: ${response.status}`);
   return response.text();
 }
@@ -21,6 +21,16 @@ async function loadText(path) {
       'chunks/app-3.txt'
     ].map(loadText));
     (0, eval)(jsParts.join(''));
+
+    // The app bundle is loaded after the browser's native window.load event.
+    // Trigger the first render explicitly so the dashboard appears immediately.
+    if (typeof window.render === 'function') {
+      window.render();
+    } else if (typeof render === 'function') {
+      render();
+    } else {
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    }
   } catch (error) {
     console.error(error);
     const app = document.getElementById('app');
