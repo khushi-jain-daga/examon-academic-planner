@@ -1,56 +1,71 @@
 # Examon Academic Planner V5
 
-A self-contained browser-based academic operations tool for Examon Education.
+A browser-based academic operations and study-plan generation tool for Examon Education.
 
-## What this version includes
+## Current V5 features
 
-- **Premium Study Plan PDF** (print / Save as PDF)
-  - Branded premium cover page (batch, exam, type, branch, date range)
-  - Executive KPI overview (classes, active dates, modules, faculty, technical/non-tech/theory/practice)
-  - Faculty allocation & workload bars
-  - Category-wise module roadmap cards (faculty, classes, priority, track, timing, date span)
-  - Improved date-wise schedule pages (clean table hierarchy, zebra rows, category chips, repeating header/footer, page numbering)
-  - Academic notes / closing page
-  - A4 print CSS with `print-color-adjust: exact`
-- Lighter operational UI (navy sidebar + light workspace)
-- Create Study Plan wizard
-- Rolling Batch import workflow (e.g. SSC JE 1.0 → SSC JE 2.0)
-  - Import the previous plan structure
-  - Automatically move subjects completed before the new batch start date to the end of the track
-  - Keep ongoing/upcoming subjects earlier
-  - Change/delete/add subjects, classes, timings, priority and tracks before generation
+- Premium Study Plan PDF / Print view
+  - branded cover
+  - KPI overview
+  - faculty workload
+  - category-wise module roadmap
+  - polished date-wise schedule tables
+  - page numbering and academic notes
+- Light operational UI with navy sidebar
+- Create Study Plan workflow
 - Faculty ↔ Subject association via Subject Master
+- Subject priority, tracks, timings, class counts and duration controls
 - Monday–Friday scheduling by default
-- Saturday/Sunday only through explicit manual/reschedule use
-- Calendar exports: full CSV + per-day CSV + per-day print/PDF
-- Local browser persistence and JSON backup import/export
+- Saturday/Sunday available only through explicit rescheduling
+- Rolling Batch import workflow, e.g. SSC JE 1.0 → SSC JE 2.0
+  - copies the previous batch structure
+  - moves already-completed subjects later in the new track
+  - keeps ongoing/upcoming subjects earlier
+  - still allows add/delete/edit before generation
+- Calendar exports
+  - full calendar CSV
+  - daily CSV
+  - daily print / Save as PDF
+- Browser localStorage persistence
+- JSON backup/import-export
 
 ## Run locally
 
-This is a static app. No build step is required.
+The repository uses compressed runtime bundles so it must be served over HTTP rather than opened directly with `file://`.
 
-1. Download or clone this repository.
-2. Open `index.html` in a modern browser.
+```bash
+npm run dev
+```
 
-For a local web server (recommended for development), run:
+Then open the local address shown in the terminal, normally `http://localhost:5173`.
+
+You can also use any static server, for example:
 
 ```bash
 npx serve .
 ```
 
-## Deploy
+## Deploy to Vercel
 
-The included `vercel.json` is configured for static deployment on Vercel.
+This repository includes `vercel.json` and can be deployed as a static project on Vercel.
 
-## Important note about local data
+The main runtime files are:
 
-The app stores operational data in browser `localStorage`. Use the JSON backup/export feature before clearing browser storage or moving to another machine.
+- `index.html` — app entry
+- `loader.js` — loads and decompresses the runtime bundles in the browser
+- `app.js.gz` — V5 application logic
+- `styles.css.gz` — V5 styles
+- `assets/examon-logo.webp` — Examon branding asset
+
+## Data note
+
+Operational data is stored in browser `localStorage`. Export a JSON backup before clearing browser data or moving to another device.
 
 ## Main workflow
 
-1. Maintain faculty and subject associations.
-2. Create a new study plan or import a previous batch as a rolling batch.
-3. Enter class counts, priorities, tracks and timings.
+1. Maintain Faculty and Subject associations.
+2. Create a new study plan or start a Rolling Batch from a previous batch.
+3. Set classes, priority, track, timing and duration.
 4. Generate the schedule.
-5. Review/edit sessions and exceptions.
-6. Export calendar/day schedules or print the premium study plan as PDF.
+5. Review/edit sessions and weekend exceptions.
+6. Export daily/full calendar data or print the premium study plan as PDF.
