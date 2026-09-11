@@ -1,25 +1,37 @@
-/* Fix PDF/print footer so it stays at the bottom of every A4 page. */
+/* Final PDF/print footer fix: keep footer at true page bottom without overlapping content. */
 (function () {
   function installPrintFooterFix() {
-    if (document.querySelector('style[data-print-footer-fix]')) return;
+    let style = document.querySelector('style[data-print-footer-fix]');
+    if (!style) {
+      style = document.createElement('style');
+      style.setAttribute('data-print-footer-fix', 'true');
+      document.head.appendChild(style);
+    }
 
-    const style = document.createElement('style');
-    style.setAttribute('data-print-footer-fix', 'true');
     style.textContent = `
+      .print-area {
+        background: #eaf2f7 !important;
+      }
+
       .print-page {
         position: relative !important;
         min-height: 1122px !important;
-        padding-bottom: 74px !important;
         box-sizing: border-box !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        padding-bottom: 34px !important;
       }
 
       .print-footer {
-        position: absolute !important;
-        left: 48px !important;
-        right: 48px !important;
-        bottom: 26px !important;
-        width: auto !important;
-        margin: 0 !important;
+        position: static !important;
+        left: auto !important;
+        right: auto !important;
+        bottom: auto !important;
+        transform: none !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        margin-top: auto !important;
         padding-top: 10px !important;
         border-top: 1px solid #d7e4ec !important;
         display: flex !important;
@@ -28,9 +40,10 @@
         gap: 16px !important;
         color: #5f7c91 !important;
         background: transparent !important;
-        z-index: 10000 !important;
+        z-index: 10001 !important;
         font-size: 12px !important;
         line-height: 1.25 !important;
+        clear: both !important;
       }
 
       .print-footer span:first-child {
@@ -43,29 +56,48 @@
         white-space: nowrap !important;
       }
 
+      .print-page::after {
+        z-index: 9999 !important;
+        pointer-events: none !important;
+      }
+
       @media print {
+        @page { size: A4; margin: 0; }
+
         .print-page {
           min-height: 297mm !important;
           height: 297mm !important;
-          padding-bottom: 22mm !important;
-          overflow: hidden !important;
+          max-height: 297mm !important;
           page-break-after: always !important;
           break-after: page !important;
+          overflow: hidden !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
         }
 
         .print-footer {
-          left: 14mm !important;
-          right: 14mm !important;
-          bottom: 8mm !important;
+          margin-top: auto !important;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
         }
       }
     `;
-    document.head.appendChild(style);
   }
 
-  installPrintFooterFix();
-  window.addEventListener('hashchange', () => setTimeout(installPrintFooterFix, 50));
-  new MutationObserver(installPrintFooterFix).observe(document.documentElement, { childList: true, subtree: true });
+  function normalizeFooters() {
+    installPrintFooterFix();
+    document.querySelectorAll('.print-footer').forEach(footer => {
+      footer.style.position = 'static';
+      footer.style.marginTop = 'auto';
+      footer.style.left = 'auto';
+      footer.style.right = 'auto';
+      footer.style.bottom = 'auto';
+      footer.style.width = '100%';
+    });
+  }
+
+  normalizeFooters();
+  window.addEventListener('hashchange', () => setTimeout(normalizeFooters, 80));
+  window.addEventListener('load', () => setTimeout(normalizeFooters, 120));
+  new MutationObserver(() => setTimeout(normalizeFooters, 20)).observe(document.documentElement, { childList: true, subtree: true });
 })();
