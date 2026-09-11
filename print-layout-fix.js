@@ -47,13 +47,30 @@
         font-size: 10px !important;
         line-height: 1.2 !important;
         background: rgba(255,255,255,0.92) !important;
-        z-index: 10002 !important;
+        z-index: 10005 !important;
       }
 
       .print-footer span:first-child { font-weight: 700 !important; }
       .print-footer span:last-child { text-align: right !important; white-space: nowrap !important; }
 
-      .print-page > :not(.print-footer) { position: relative !important; z-index: 2 !important; }
+      .print-page > :not(.print-footer):not(.print-watermark-final) { position: relative !important; z-index: 2 !important; }
+
+      .print-watermark-final {
+        position: absolute !important;
+        left: 50% !important;
+        top: 50% !important;
+        width: 520px !important;
+        height: 520px !important;
+        transform: translate(-50%, -50%) !important;
+        object-fit: contain !important;
+        opacity: 0.15 !important;
+        z-index: 10004 !important;
+        pointer-events: none !important;
+        user-select: none !important;
+        mix-blend-mode: multiply !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
 
       .print-page::after {
         content: '' !important;
@@ -67,9 +84,10 @@
         background-repeat: no-repeat !important;
         background-position: center center !important;
         background-size: contain !important;
-        opacity: 0.13 !important;
-        z-index: 10000 !important;
+        opacity: 0.12 !important;
+        z-index: 10003 !important;
         pointer-events: none !important;
+        mix-blend-mode: multiply !important;
       }
 
       .print-page .module-summary,
@@ -133,8 +151,13 @@
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
         }
+        .print-watermark-final {
+          opacity: 0.15 !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
         .print-page::after {
-          opacity: 0.13 !important;
+          opacity: 0.12 !important;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
         }
@@ -184,6 +207,21 @@
     }
   }
 
+  function ensureWatermark(page) {
+    if (!page) return;
+    let watermark = page.querySelector(':scope > .print-watermark-final');
+    if (!watermark) {
+      watermark = document.createElement('img');
+      watermark.className = 'print-watermark-final';
+      watermark.alt = 'Examon watermark';
+      watermark.decoding = 'async';
+      page.appendChild(watermark);
+    }
+    watermark.src = LOGO;
+    // keep watermark above content but below footer controls
+    page.appendChild(watermark);
+  }
+
   function hidePriorityColumns() {
     document.querySelectorAll('.print-page table').forEach(table => {
       const rows = Array.from(table.rows || []);
@@ -196,7 +234,6 @@
         if (text === 'priority' || text === 'p' || text.includes('priority')) priorityIndexes.push(index);
       });
 
-      // Some generated PDF tables do not label the column clearly, but show P1 values.
       rows.slice(1).forEach(row => Array.from(row.cells || []).forEach((cell, index) => {
         const text = String(cell.textContent || '').trim();
         if (/^P\d+$/i.test(text)) priorityIndexes.push(index);
@@ -248,7 +285,6 @@
       let firstOverflowIndex = rows.findIndex(row => row.getBoundingClientRect().bottom > limit);
       if (firstOverflowIndex < 0) return;
 
-      // Keep at least one row on the current page when possible.
       if (firstOverflowIndex === 0) firstOverflowIndex = 1;
 
       const overflowRows = rows.slice(firstOverflowIndex);
@@ -280,7 +316,10 @@
     hidePriorityColumns();
     splitOversizedPages();
     const pages = Array.from(document.querySelectorAll('.print-page'));
-    pages.forEach(normalizeFooter);
+    pages.forEach((page, index) => {
+      normalizeFooter(page, index);
+      ensureWatermark(page);
+    });
     hidePriorityColumns();
   }
 
