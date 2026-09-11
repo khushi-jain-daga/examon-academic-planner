@@ -1,15 +1,11 @@
 // Examon Academic Planner cloud sync configuration
 //
-// To activate permanent cloud saving:
-// 1. Create a free Supabase project.
-// 2. Run the SQL in supabase-schema.sql inside Supabase SQL Editor.
-// 3. Replace the placeholder values below with your Project URL and anon public key.
-//
-// Keep this anon key public only. NEVER paste your service_role key here.
+// Public Supabase anon key is safe to use in browser apps.
+// Do not put database password, service_role key, JWT secret, or private tokens here.
 
 window.EXAMON_SUPABASE = {
-  enabled: false,
-  url: "",
-  anonKey: "",
+  enabled: true,
+  url: "https://fsnyorrmezxitbmimovg.supabase.co",
+  anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZzbnlvcnJtZXp4aXRibWltb3ZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkxNDUzODIsImV4cCI6MjEwNDcyMTM4Mn0.Luh1UBsJHCiDmqWOxynlnaEUFAo7SaewgwXtj_C_NDo",
   storeKey: "examon-main-workspace"
 };
