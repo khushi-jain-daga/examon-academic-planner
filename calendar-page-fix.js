@@ -1,53 +1,59 @@
-/* Standalone stable Calendar renderer for Examon Academic Planner.
-   This bypasses the broken calendar HTML in the main chunk and renders from saved planner data. */
+/* Standalone Master Calendar renderer with full CSV and full PDF exports. */
 (function () {
-  const STORAGE_KEY = 'examonAcademicPlannerV1';
   const LOGO = 'assets/examon-logo.webp';
+  const FOOTER = 'Examon Education | Mentorship: 8368886452';
 
-  function esc(value) {
+  function escSafe(value) {
     return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   }
-  function readState() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { plans: [], faculty: [] }; }
-    catch (_) { return { plans: [], faculty: [] }; }
+
+  function fmtDate(date) {
+    if (typeof pretty === 'function') return pretty(date);
+    return date || '';
   }
-  function dateObj(iso) {
-    const [y, m, d] = String(iso || '').split('-').map(Number);
-    return new Date(y || 2000, (m || 1) - 1, d || 1);
+
+  function daySafe(date) {
+    if (typeof dayName === 'function') return dayName(date);
+    try { return new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' }); }
+    catch (_) { return ''; }
   }
-  function pretty(date) {
-    if (!date) return '';
-    return dateObj(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  function facultySafe(ids) {
+    if (typeof facultyNames === 'function') return facultyNames(ids || []);
+    const faculties = (window.state && state.faculty) || [];
+    return (ids || []).map(id => faculties.find(f => f.id === id)?.name || '').filter(Boolean).join(' & ');
   }
-  function dayName(date) {
-    return dateObj(date).toLocaleDateString('en-US', { weekday: 'short' });
-  }
-  function facultyNames(st, ids) {
-    const list = st.faculty || [];
-    return (ids || []).map(id => list.find(f => f.id === id)?.name || '').filter(Boolean).join(' & ') || '—';
-  }
-  function rows() {
-    const st = readState();
-    const output = [];
-    (st.plans || []).forEach(plan => {
+
+  function allCalendarItems() {
+    const plans = (window.state && Array.isArray(state.plans)) ? state.plans : [];
+    const rows = [];
+    plans.forEach(plan => {
       (plan.sessions || []).forEach(session => {
-        output.push({
+        rows.push({
           planId: plan.id,
           batch: plan.batchName || 'Untitled Batch',
           exam: plan.examName || '',
-          date: session.date || '',
-          time: session.startTime || '',
-          subject: session.subjectName || '',
+          date: session.date,
+          startTime: session.startTime || '',
+          subjectName: session.subjectName || '',
+          topic: session.topic || '',
           category: session.category || '',
-          faculty: facultyNames(st, session.facultyIds || []),
+          facultyIds: session.facultyIds || [],
           exception: session.exception || ''
         });
       });
     });
-    return output.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time) || a.batch.localeCompare(b.batch));
+    return rows.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.startTime).localeCompare(String(b.startTime)) || String(a.subjectName).localeCompare(String(b.subjectName)));
   }
-  function csvDownload(name, data) {
-    const csv = data.map(row => row.map(value => '"' + String(value ?? '').replace(/"/g, '""') + '"').join(',')).join('\n');
+
+  function groupedItems() {
+    const grouped = {};
+    allCalendarItems().forEach(item => { (grouped[item.date] ||= []).push(item); });
+    return grouped;
+  }
+
+  function downloadCsv(name, rows) {
+    const csv = rows.map(row => row.map(value => '"' + String(value ?? '').replace(/"/g, '""') + '"').join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -58,66 +64,97 @@
     URL.revokeObjectURL(a.href);
   }
 
+  function calendarRows(items) {
+    const rows = [['Date', 'Day', 'Time', 'Batch', 'Exam', 'Subject', 'Topic', 'Category', 'Faculty']];
+    items.forEach(item => rows.push([
+      item.date,
+      daySafe(item.date),
+      item.startTime,
+      item.batch,
+      item.exam,
+      item.subjectName,
+      item.topic,
+      item.category,
+      facultySafe(item.facultyIds)
+    ]));
+    return rows;
+  }
+
   window.exportCalendarCSV = function () {
-    const data = [['Date', 'Day', 'Time', 'Batch', 'Exam', 'Subject', 'Category', 'Faculty']];
-    rows().forEach(r => data.push([r.date, dayName(r.date), r.time, r.batch, r.exam, r.subject, r.category, r.faculty]));
-    csvDownload('examon-master-calendar.csv', data);
+    downloadCsv('examon-master-calendar-full.csv', calendarRows(allCalendarItems()));
   };
+
   window.exportDayCSV = function (date) {
-    const data = [['Date', 'Day', 'Time', 'Batch', 'Exam', 'Subject', 'Category', 'Faculty']];
-    rows().filter(r => r.date === date).forEach(r => data.push([r.date, dayName(r.date), r.time, r.batch, r.exam, r.subject, r.category, r.faculty]));
-    csvDownload('examon-calendar-' + date + '.csv', data);
+    downloadCsv('examon-calendar-' + date + '.csv', calendarRows(allCalendarItems().filter(item => item.date === date)));
   };
-  window.printDay = function (date) {
-    const dayRows = rows().filter(r => r.date === date);
+
+  function printWindow(html) {
     const w = window.open('', '_blank');
-    w.document.write('<!doctype html><html><head><title>Examon Daily Calendar</title><style>body{font-family:Arial,sans-serif;color:#062033;padding:28px}header{display:flex;justify-content:space-between;align-items:center;border-bottom:4px solid #20bfc7;padding-bottom:14px;margin-bottom:20px}img{height:58px;object-fit:contain}table{width:100%;border-collapse:collapse}th,td{border:1px solid #d9e4ec;padding:9px;font-size:12px;text-align:left;vertical-align:top}th{background:#eaf8fb}.muted{color:#5f7c91;font-size:12px}</style></head><body><header><div><h1>Daily Class Calendar</h1><div class="muted">' + esc(pretty(date)) + ' · ' + esc(dayName(date)) + ' · ' + dayRows.length + ' classes</div></div><img src="' + LOGO + '"></header><table><thead><tr><th>Time</th><th>Batch</th><th>Subject</th><th>Category</th><th>Faculty</th></tr></thead><tbody>' + dayRows.map(r => '<tr><td><b>' + esc(r.time) + '</b></td><td>' + esc(r.batch) + '<div class="muted">' + esc(r.exam) + '</div></td><td><b>' + esc(r.subject) + '</b></td><td>' + esc(r.category) + '</td><td>' + esc(r.faculty) + '</td></tr>').join('') + '</tbody></table><script>window.onload=function(){window.print()}<\/script></body></html>');
+    if (!w) { alert('Please allow popups to print/download PDF.'); return; }
+    w.document.write(html);
     w.document.close();
+  }
+
+  function printHtml(title, subtitle, bodyHtml) {
+    return '<!doctype html><html><head><title>' + escSafe(title) + '</title><style>' +
+      '@page{size:A4;margin:0}*{box-sizing:border-box}body{margin:0;background:#eef5f9;color:#062033;font-family:Arial,sans-serif}.page{position:relative;width:210mm;min-height:297mm;margin:0 auto 12mm;background:#fff;padding:16mm 15mm 22mm;overflow:hidden;page-break-after:always}.page:after{content:"";position:absolute;left:50%;top:50%;width:125mm;height:125mm;transform:translate(-50%,-50%);background:url("' + LOGO + '") center/contain no-repeat;opacity:.13;z-index:20;pointer-events:none}.content{position:relative;z-index:2}.top{display:flex;justify-content:space-between;align-items:center;border-bottom:4px solid #20bfc7;padding-bottom:10px;margin-bottom:14px}.top img{height:18mm;object-fit:contain}.kicker{letter-spacing:.08em;color:#5f7c91;font-size:11px;font-weight:800;text-transform:uppercase}h1{font-size:26px;margin:3px 0 4px}.subtitle{color:#5f7c91;font-size:13px}.day{margin-top:14px;border:1px solid #d9e9ef;border-radius:14px;overflow:hidden;break-inside:avoid}.day-head{background:#eaf8f8;padding:10px 12px;display:flex;justify-content:space-between;gap:12px}.day-head b{font-size:17px}.day-head span{display:block;color:#5f7c91;font-size:12px;margin-top:3px}table{width:100%;border-collapse:collapse}th,td{border-top:1px solid #d9e4ec;padding:7px 8px;text-align:left;font-size:10.5px;vertical-align:top}th{background:#f4fbfc;color:#063244;text-transform:uppercase;letter-spacing:.04em}.time{font-weight:900;color:#00a8b5;font-size:13px}.subject{font-weight:800}.muted{display:block;color:#6f8295;font-size:9.5px;margin-top:2px}.pill{display:inline-block;background:#eef0ff;color:#3f49bc;border-radius:999px;padding:4px 8px;font-weight:800;font-size:9.5px;white-space:nowrap}.footer{position:absolute;left:15mm;right:15mm;bottom:8mm;border-top:1px solid #d9e4ec;padding-top:5px;display:flex;justify-content:space-between;color:#55708a;font-size:10px;z-index:30;background:rgba(255,255,255,.86)}@media print{body{background:#fff}.page{margin:0;break-after:page;-webkit-print-color-adjust:exact;print-color-adjust:exact}}' +
+      '</style></head><body>' + bodyHtml + '<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>';
+  }
+
+  window.printDay = function (date) {
+    const rows = allCalendarItems().filter(item => item.date === date);
+    const body = '<section class="page"><div class="content"><div class="top"><div><div class="kicker">Examon Education · Daily Calendar</div><h1>' + escSafe(fmtDate(date)) + '</h1><div class="subtitle">' + escSafe(daySafe(date)) + ' · ' + rows.length + ' classes</div></div><img src="' + LOGO + '"></div><div class="day"><table><thead><tr><th>Time</th><th>Batch</th><th>Subject</th><th>Category</th><th>Faculty</th></tr></thead><tbody>' + rows.map(item => '<tr><td class="time">' + escSafe(item.startTime) + '</td><td>' + escSafe(item.batch) + '<span class="muted">' + escSafe(item.exam) + '</span></td><td><span class="subject">' + escSafe(item.subjectName) + '</span><span class="muted">' + escSafe(item.topic) + '</span></td><td><span class="pill">' + escSafe(item.category) + '</span></td><td>' + escSafe(facultySafe(item.facultyIds)) + '</td></tr>').join('') + '</tbody></table></div></div><div class="footer"><span>' + FOOTER + '</span><span>Daily Calendar</span></div></section>';
+    printWindow(printHtml('Examon Daily Calendar ' + date, '', body));
   };
 
-  function groupByDate(items) {
-    return items.reduce((acc, item) => { (acc[item.date] ||= []).push(item); return acc; }, {});
-  }
-  function navLink(hash, label, active) {
-    return '<a class="nav-link ' + (active ? 'active' : '') + '" href="' + hash + '"><span>○</span>' + label + '</a>';
-  }
-  function renderCalendar() {
-    if (!(location.hash === '#/calendar' || location.hash.endsWith('/calendar'))) return;
-    const app = document.getElementById('app');
-    if (!app) return;
+  window.printFullCalendarPDF = function () {
+    const grouped = groupedItems();
+    const dates = Object.keys(grouped);
+    const total = allCalendarItems().length;
+    let pages = '<section class="page"><div class="content"><div class="top"><div><div class="kicker">Examon Education · Master Calendar</div><h1>Full Class Calendar</h1><div class="subtitle">' + total + ' total classes · ' + dates.length + ' active dates</div></div><img src="' + LOGO + '"></div>';
+    let countOnPage = 0;
+    dates.forEach((date, dateIndex) => {
+      const list = grouped[date];
+      const block = '<div class="day"><div class="day-head"><div><b>' + escSafe(fmtDate(date)) + '</b><span>' + escSafe(daySafe(date)) + ' · ' + list.length + ' class(es)</span></div></div><table><thead><tr><th>Time</th><th>Batch</th><th>Subject</th><th>Category</th><th>Faculty</th></tr></thead><tbody>' + list.map(item => '<tr><td class="time">' + escSafe(item.startTime) + '</td><td>' + escSafe(item.batch) + '<span class="muted">' + escSafe(item.exam) + '</span></td><td><span class="subject">' + escSafe(item.subjectName) + '</span><span class="muted">' + escSafe(item.topic) + '</span></td><td><span class="pill">' + escSafe(item.category) + '</span></td><td>' + escSafe(facultySafe(item.facultyIds)) + '</td></tr>').join('') + '</tbody></table></div>';
+      const weight = 1 + list.length;
+      if (dateIndex > 0 && countOnPage + weight > 13) {
+        pages += '</div><div class="footer"><span>' + FOOTER + '</span><span>Master Calendar</span></div></section><section class="page"><div class="content"><div class="top"><div><div class="kicker">Examon Education · Master Calendar</div><h1>Full Class Calendar</h1><div class="subtitle">Continued</div></div><img src="' + LOGO + '"></div>';
+        countOnPage = 0;
+      }
+      pages += block;
+      countOnPage += weight;
+    });
+    if (!dates.length) pages += '<div class="day"><div class="day-head"><b>No scheduled sessions yet.</b></div></div>';
+    pages += '</div><div class="footer"><span>' + FOOTER + '</span><span>Master Calendar</span></div></section>';
+    printWindow(printHtml('Examon Full Calendar PDF', '', pages));
+  };
 
-    const items = rows();
-    const grouped = groupByDate(items);
-    const groups = Object.entries(grouped).map(([date, list]) => {
-      return '<section class="cal-day"><div class="cal-day-head"><div><h3>' + esc(pretty(date)) + '</h3><p>' + esc(dayName(date)) + ' · ' + list.length + ' class(es)</p></div><div class="cal-actions"><button onclick="exportDayCSV(\'' + esc(date) + '\')">Export Day CSV</button><button class="gold" onclick="printDay(\'' + esc(date) + '\')">Print / PDF Day</button></div></div>' +
-        list.map(r => '<div class="cal-row"><div class="cal-time">' + esc(r.time) + '</div><div><b>' + esc(r.subject) + '</b><p>' + esc(r.batch) + '</p></div><div>' + esc(r.faculty) + '</div><div><span>' + esc(r.category) + '</span></div></div>').join('') + '</section>';
-    }).join('');
+  function buildCalendarHtml() {
+    const items = allCalendarItems();
+    const grouped = groupedItems();
+    const groupsHtml = Object.keys(grouped).length
+      ? Object.entries(grouped).map(([date, list]) => '<div class="day-group"><div class="day-head"><div><b>' + escSafe(fmtDate(date)) + '</b><span class="day-sub">' + escSafe(daySafe(date)) + ' · ' + list.length + ' class(es)</span></div><div class="toolbar"><button class="btn small" onclick="exportDayCSV(\'' + escSafe(date) + '\')">Download Day CSV</button><button class="btn small gold" onclick="printDay(\'' + escSafe(date) + '\')">Download Day PDF</button></div></div>' + list.map(item => '<div class="session"><div class="time">' + escSafe(item.startTime) + '</div><div><b>' + escSafe(item.subjectName) + '</b><div class="meta"><a href="#/plans/' + encodeURIComponent(item.planId) + '">' + escSafe(item.batch) + '</a></div></div><div class="faculty">' + escSafe(facultySafe(item.facultyIds)) + '</div><div class="meta">' + escSafe(item.category) + '</div>' + (item.exception ? '<span class="tag gold">Weekend</span>' : '<span></span>') + '</div>').join('') + '</div>').join('')
+      : '<div class="card empty">No scheduled sessions yet.</div>';
 
-    app.innerHTML = '<style>' +
-      'body{margin:0;background:#eef6fa;color:#062033;font-family:Inter,Arial,sans-serif}.app-shell{display:grid;grid-template-columns:250px 1fr;min-height:100vh}.sidebar{background:#08243a;color:#dcecff;padding:26px 18px;position:sticky;top:0;height:100vh}.sidebar img{width:58px;height:58px;object-fit:contain;margin-bottom:24px}.nav-link{display:flex;gap:12px;align-items:center;color:#dcecff;text-decoration:none;padding:13px 12px;border-radius:12px;margin:4px 0;font-weight:700}.nav-link.active{background:#123f60;color:#19d6df}.side-card{position:absolute;left:18px;right:18px;bottom:24px;background:#113a59;border:1px solid #295776;border-radius:14px;padding:14px;color:#aad7e7}.topbar{height:82px;background:white;border-bottom:1px solid #d9e6ee;display:flex;align-items:center;justify-content:space-between;padding:0 38px}.topbar img{height:42px;object-fit:contain}.create-btn{background:#13c2c8;color:#062033;border:0;border-radius:13px;padding:14px 20px;font-weight:900;text-decoration:none}.main{padding:36px 38px}.page-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}.page-title h1{font-size:34px;margin:0 0 8px}.page-title p{margin:0;color:#627c90;font-size:17px}.export-main{background:white;border:1px solid #cfe0eb;border-radius:14px;padding:14px 18px;font-weight:900;box-shadow:0 10px 30px rgba(6,32,51,.08);cursor:pointer}.cal-day{background:white;border:1px solid #d9e6ee;border-radius:22px;overflow:hidden;margin-bottom:20px;box-shadow:0 20px 50px rgba(6,32,51,.06)}.cal-day-head{background:#eaf8f8;display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid #d9e6ee}.cal-day-head h3{margin:0;font-size:20px}.cal-day-head p{margin:4px 0 0;color:#637b8e}.cal-actions{display:flex;gap:10px}.cal-actions button{border:0;background:#0b2c44;color:white;border-radius:12px;padding:10px 14px;font-weight:900;cursor:pointer}.cal-actions button.gold{background:#e3b322;color:#111}.cal-row{display:grid;grid-template-columns:100px minmax(260px,1fr) 220px 210px;gap:18px;align-items:center;padding:15px 22px;border-bottom:1px solid #e1ebf2}.cal-row:last-child{border-bottom:0}.cal-time{font-size:19px;color:#08aeb8;font-weight:900}.cal-row b{font-size:17px}.cal-row p{margin:4px 0 0;color:#667e91;font-size:13px}.cal-row span{display:inline-block;background:#eef2ff;color:#4655b8;border-radius:999px;padding:6px 10px;font-weight:800;font-size:12px}.empty{background:white;border:1px solid #d9e6ee;border-radius:22px;padding:34px;text-align:center;color:#637b8e}.cloud-status-pill{position:fixed;right:18px;bottom:18px;z-index:9999;border-radius:999px;padding:9px 13px;font:700 12px Arial,sans-serif;box-shadow:0 8px 24px rgba(6,32,51,.15);background:#e6fbff;color:#006775;border:1px solid #b7edf5}@media(max-width:900px){.app-shell{grid-template-columns:1fr}.sidebar{display:none}.cal-row{grid-template-columns:1fr}.topbar{padding:0 18px}.main{padding:24px 18px}}' +
-      '</style><div class="app-shell"><aside class="sidebar"><img src="' + LOGO + '" alt="Examon">' +
-      navLink('#/dashboard','Dashboard',false) + navLink('#/create','Create Study Plan',false) + navLink('#/plans','Study Plans',false) + navLink('#/templates','Templates',false) + navLink('#/faculty','Faculty',false) + navLink('#/subjects','Subjects',false) + navLink('#/calendar','Calendar',true) + navLink('#/settings','Settings',false) +
-      '<div class="side-card"><b>Local App</b><br><span>Data saves in this browser and cloud when Supabase is active.</span></div></aside><section><header class="topbar"><div><h2>Calendar</h2><p>Daily class calendar and exports</p></div><div style="display:flex;gap:18px;align-items:center"><a class="create-btn" href="#/create">+ Create</a><img src="' + LOGO + '" alt="Examon"></div></header><main class="main"><div class="page-title"><div><h1>Master Calendar</h1><p>Daily operations view across all batches. Export each day for the academic team.</p></div><button class="export-main" onclick="exportCalendarCSV()">Export Full Calendar CSV</button></div>' + (items.length ? groups : '<div class="empty">No scheduled sessions yet.</div>') + '</main></section></div>';
-    document.body.dataset.calendarStandalone = 'true';
+    return '<div class="page-title"><div><h2>Master Calendar</h2><p>Daily operations view across all batches. Total ' + items.length + ' classes.</p></div><div class="toolbar"><button class="btn" onclick="exportCalendarCSV()">Download Full CSV</button><button class="btn gold" onclick="printFullCalendarPDF()">Download Full PDF</button></div></div>' + groupsHtml;
   }
 
-  function handleRoute() {
+  function installCalendarOverride() {
+    window.calendarPage = function () {
+      if (typeof layout === 'function') return layout(buildCalendarHtml(), 'Calendar', 'Daily class calendar and exports');
+      return buildCalendarHtml();
+    };
+    try { calendarPage = window.calendarPage; } catch (_) {}
+  }
+
+  function maybeRenderCalendar() {
+    installCalendarOverride();
     if (location.hash === '#/calendar' || location.hash.endsWith('/calendar')) {
-      renderCalendar();
-    } else if (document.body.dataset.calendarStandalone === 'true') {
-      delete document.body.dataset.calendarStandalone;
-      setTimeout(() => location.reload(), 20);
+      try { if (typeof render === 'function') render(); } catch (_) {}
     }
   }
 
-  window.addEventListener('hashchange', () => setTimeout(handleRoute, 20));
-  window.addEventListener('storage', () => setTimeout(handleRoute, 50));
-  setTimeout(handleRoute, 300);
-  setTimeout(handleRoute, 1000);
-  setInterval(() => {
-    if (location.hash === '#/calendar' || location.hash.endsWith('/calendar')) {
-      const appText = (document.getElementById('app')?.textContent || '');
-      if (!appText.includes('Export Full Calendar CSV') || appText.includes('</div>')) renderCalendar();
-    }
-  }, 1500);
+  installCalendarOverride();
+  setTimeout(maybeRenderCalendar, 300);
+  window.addEventListener('hashchange', () => setTimeout(maybeRenderCalendar, 50));
 })();
