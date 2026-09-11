@@ -1,5 +1,5 @@
 async function loadText(path) {
-  const response = await fetch(`/${path}?v=6`, { cache: 'no-store' });
+  const response = await fetch(`/${path}?v=7`, { cache: 'no-store' });
   if (!response.ok) throw new Error(`Failed to load ${path}: ${response.status}`);
   return response.text();
 }
@@ -206,8 +206,20 @@ function installExamonPatches() {
   }, true);
 }
 
+async function waitForCloudReady() {
+  if (!window.EXAMON_CLOUD_READY_PROMISE) return;
+  try {
+    await Promise.race([
+      window.EXAMON_CLOUD_READY_PROMISE,
+      new Promise(resolve => setTimeout(resolve, 1800))
+    ]);
+  } catch (_) {}
+}
+
 (async () => {
   try {
+    await waitForCloudReady();
+
     const cssParts = await Promise.all(['chunks/styles-1.txt','chunks/styles-2.txt','chunks/styles-3.txt'].map(loadText));
     const style = document.createElement('style');
     style.textContent = cssParts.join('');
