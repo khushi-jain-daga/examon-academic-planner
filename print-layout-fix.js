@@ -1,8 +1,7 @@
-/* Final print/PDF layout fix for Examon Academic Planner */
+/* Print/PDF layout fix for Examon Academic Planner */
 (function () {
   const FOOTER_TEXT = 'Examon Education | Mentorship: 8368886452';
   const LOGO = 'assets/examon-logo.webp';
-  const FOOTER_SAFE_PX = 76;
 
   function installCss() {
     let style = document.querySelector('style[data-print-layout-final]');
@@ -19,12 +18,11 @@
         position: relative !important;
         width: 210mm !important;
         min-height: 297mm !important;
-        height: 297mm !important;
-        max-height: 297mm !important;
+        height: auto !important;
         box-sizing: border-box !important;
-        padding: 16mm 18mm 31mm 18mm !important;
+        padding: 16mm 18mm 24mm 18mm !important;
         margin: 0 auto 18mm auto !important;
-        overflow: hidden !important;
+        overflow: visible !important;
         background: #ffffff !important;
       }
 
@@ -34,7 +32,7 @@
         right: 18mm !important;
         bottom: 8mm !important;
         width: auto !important;
-        height: 10mm !important;
+        min-height: 8mm !important;
         box-sizing: border-box !important;
         display: flex !important;
         align-items: center !important;
@@ -46,14 +44,17 @@
         color: #55708a !important;
         font-size: 10px !important;
         line-height: 1.2 !important;
-        background: rgba(255,255,255,0.92) !important;
+        background: transparent !important;
         z-index: 10005 !important;
       }
 
       .print-footer span:first-child { font-weight: 700 !important; }
       .print-footer span:last-child { text-align: right !important; white-space: nowrap !important; }
 
-      .print-page > :not(.print-footer):not(.print-watermark-final) { position: relative !important; z-index: 2 !important; }
+      .print-page > :not(.print-footer):not(.print-watermark-final) {
+        position: relative !important;
+        z-index: 2 !important;
+      }
 
       .print-watermark-final {
         position: absolute !important;
@@ -90,21 +91,26 @@
         mix-blend-mode: multiply !important;
       }
 
-      .print-page .module-summary,
-      .print-page .schedule-table,
-      .print-page table { margin-bottom: 0 !important; }
+      .print-page table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        margin-bottom: 12mm !important;
+      }
 
-      .print-page table { width: 100% !important; border-collapse: collapse !important; }
-      .print-page tr { break-inside: avoid !important; page-break-inside: avoid !important; }
+      .print-page tr {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+      }
 
-      /* Do not show priority / P1 in final draft PDF */
       .print-page th.priority-col,
       .print-page td.priority-col,
       .print-page th[data-priority-col],
       .print-page td[data-priority-col],
       .print-page .priority-col,
       .print-page .module-priority,
-      .print-page .priority-pill { display: none !important; }
+      .print-page .priority-pill {
+        display: none !important;
+      }
 
       .print-page .print-continuation-title {
         font-size: 18px !important;
@@ -116,14 +122,15 @@
       }
 
       .print-page .footer-guard {
-        position: absolute !important;
-        left: 18mm !important;
-        right: 18mm !important;
-        bottom: 18mm !important;
-        height: 12mm !important;
-        background: linear-gradient(to bottom, rgba(255,255,255,0), #fff 55%) !important;
-        z-index: 10001 !important;
-        pointer-events: none !important;
+        display: none !important;
+      }
+
+      .generated-print-page {
+        height: 297mm !important;
+        min-height: 297mm !important;
+        max-height: 297mm !important;
+        overflow: hidden !important;
+        padding-bottom: 26mm !important;
       }
 
       @media print {
@@ -135,13 +142,19 @@
           break-after: page !important;
           margin: 0 !important;
           width: 210mm !important;
+          height: auto !important;
+          min-height: 297mm !important;
+          padding: 16mm 18mm 24mm 18mm !important;
+          overflow: visible !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        .generated-print-page {
           height: 297mm !important;
           min-height: 297mm !important;
           max-height: 297mm !important;
-          padding: 16mm 18mm 31mm 18mm !important;
           overflow: hidden !important;
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
+          padding-bottom: 26mm !important;
         }
         .print-page > .print-footer {
           position: absolute !important;
@@ -151,13 +164,8 @@
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
         }
-        .print-watermark-final {
-          opacity: 0.15 !important;
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-        }
-        .print-page::after {
-          opacity: 0.12 !important;
+        .print-watermark-final, .print-page::after {
+          opacity: 0.14 !important;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
         }
@@ -176,6 +184,7 @@
 
   function normalizeFooter(page, index) {
     if (!page) return;
+    page.querySelectorAll(':scope > .footer-guard, .footer-guard').forEach(el => el.remove());
 
     let footers = Array.from(page.querySelectorAll('.print-footer'));
     if (!footers.length) {
@@ -187,24 +196,10 @@
     const footer = footers[0];
     const originalText = footer.textContent || '';
     footers.slice(1).forEach(f => f.remove());
-
     if (footer.parentElement !== page) page.appendChild(footer);
 
     const right = page.dataset.pageLabel || pageLabelFromFooterText(originalText, index);
     footer.innerHTML = `<span>${FOOTER_TEXT}</span><span>${right}</span>`;
-    footer.style.position = 'absolute';
-    footer.style.left = '18mm';
-    footer.style.right = '18mm';
-    footer.style.bottom = '8mm';
-    footer.style.width = 'auto';
-    footer.style.margin = '0';
-
-    let guard = page.querySelector(':scope > .footer-guard');
-    if (!guard) {
-      guard = document.createElement('div');
-      guard.className = 'footer-guard';
-      page.insertBefore(guard, footer);
-    }
   }
 
   function ensureWatermark(page) {
@@ -218,7 +213,6 @@
       page.appendChild(watermark);
     }
     watermark.src = LOGO;
-    // keep watermark above content but below footer controls
     page.appendChild(watermark);
   }
 
@@ -226,10 +220,9 @@
     document.querySelectorAll('.print-page table').forEach(table => {
       const rows = Array.from(table.rows || []);
       if (!rows.length) return;
-
-      const headerCells = Array.from(rows[0].cells || []);
       const priorityIndexes = [];
-      headerCells.forEach((cell, index) => {
+
+      Array.from(rows[0].cells || []).forEach((cell, index) => {
         const text = String(cell.textContent || '').trim().toLowerCase();
         if (text === 'priority' || text === 'p' || text.includes('priority')) priorityIndexes.push(index);
       });
@@ -248,22 +241,23 @@
     });
   }
 
-  function contentBottom(page) {
-    const pageRect = page.getBoundingClientRect();
+  function usableBottom(page) {
     const footer = page.querySelector(':scope > .print-footer');
-    if (footer) return footer.getBoundingClientRect().top - 12;
-    return pageRect.bottom - FOOTER_SAFE_PX;
+    const pageRect = page.getBoundingClientRect();
+    return footer ? footer.getBoundingClientRect().top - 18 : pageRect.bottom - 88;
   }
 
   function createContinuationPage(sourcePage, label) {
     const next = sourcePage.cloneNode(false);
+    next.className = sourcePage.className + ' generated-print-page';
     next.dataset.generatedContinuation = 'true';
-    next.dataset.pageLabel = label || sourcePage.dataset.pageLabel || 'Study Plan · Continued';
-    next.className = sourcePage.className;
+    next.dataset.pageLabel = label || 'Study Plan · Continued';
+
     const title = document.createElement('div');
     title.className = 'print-continuation-title';
-    title.textContent = label || 'Continued Schedule';
+    title.textContent = label || 'Study Plan · Continued';
     next.appendChild(title);
+
     const footer = document.createElement('div');
     footer.className = 'print-footer';
     next.appendChild(footer);
@@ -271,50 +265,55 @@
     return next;
   }
 
-  function splitTableIfNeeded(page, index) {
-    if (!page || page.dataset.paginationProcessed === 'true') return;
-    const tables = Array.from(page.querySelectorAll('table'));
-    if (!tables.length) return;
+  function splitOneTable(page, table) {
+    const tbody = table.tBodies && table.tBodies[0];
+    if (!tbody || tbody.rows.length < 2) return false;
 
-    tables.forEach(table => {
-      let tbody = table.tBodies && table.tBodies[0];
-      if (!tbody || tbody.rows.length < 2) return;
+    const rows = Array.from(tbody.rows);
+    const limit = usableBottom(page);
+    let cut = rows.findIndex(row => row.getBoundingClientRect().bottom > limit);
+    if (cut < 0) return false;
+    if (cut === 0) cut = 1;
 
-      const limit = contentBottom(page);
-      const rows = Array.from(tbody.rows);
-      let firstOverflowIndex = rows.findIndex(row => row.getBoundingClientRect().bottom > limit);
-      if (firstOverflowIndex < 0) return;
+    const overflowRows = rows.slice(cut);
+    if (!overflowRows.length) return false;
 
-      if (firstOverflowIndex === 0) firstOverflowIndex = 1;
-
-      const overflowRows = rows.slice(firstOverflowIndex);
-      if (!overflowRows.length) return;
-
-      const label = table.closest('.schedule-table') || String((page.textContent || '')).includes('Schedule')
-        ? 'Study Plan · Schedule'
-        : 'Study Plan · Continued';
-      const nextPage = createContinuationPage(page, label);
-      const newTable = table.cloneNode(false);
-      const oldThead = table.tHead ? table.tHead.cloneNode(true) : null;
-      if (oldThead) newTable.appendChild(oldThead);
-      const newBody = document.createElement('tbody');
-      overflowRows.forEach(row => newBody.appendChild(row));
-      newTable.appendChild(newBody);
-      nextPage.insertBefore(newTable, nextPage.querySelector('.print-footer'));
-    });
-
-    page.dataset.paginationProcessed = 'true';
+    const label = String(page.textContent || '').includes('Schedule') ? 'Study Plan · Schedule' : 'Study Plan · Continued';
+    const nextPage = createContinuationPage(page, label);
+    const newTable = table.cloneNode(false);
+    if (table.tHead) newTable.appendChild(table.tHead.cloneNode(true));
+    const newBody = document.createElement('tbody');
+    overflowRows.forEach(row => newBody.appendChild(row));
+    newTable.appendChild(newBody);
+    nextPage.insertBefore(newTable, nextPage.querySelector('.print-footer'));
+    return true;
   }
 
-  function splitOversizedPages() {
-    const pages = Array.from(document.querySelectorAll('.print-page:not([data-generated-continuation])'));
-    pages.forEach((page, index) => splitTableIfNeeded(page, index));
+  function paginateTables() {
+    let guard = 0;
+    while (guard < 20) {
+      guard += 1;
+      let changed = false;
+      const pages = Array.from(document.querySelectorAll('.print-page'));
+      for (const page of pages) {
+        normalizeFooter(page, pages.indexOf(page));
+        for (const table of Array.from(page.querySelectorAll('table'))) {
+          if (splitOneTable(page, table)) {
+            changed = true;
+            break;
+          }
+        }
+        if (changed) break;
+      }
+      if (!changed) break;
+    }
   }
 
   function fixPrintPages() {
     installCss();
+    document.querySelectorAll('.footer-guard').forEach(el => el.remove());
     hidePriorityColumns();
-    splitOversizedPages();
+    paginateTables();
     const pages = Array.from(document.querySelectorAll('.print-page'));
     pages.forEach((page, index) => {
       normalizeFooter(page, index);
@@ -330,17 +329,17 @@
     setTimeout(() => {
       pending = false;
       fixPrintPages();
-    }, 80);
+    }, 120);
   }
 
   function boot() {
     installCss();
-    setTimeout(fixPrintPages, 250);
+    setTimeout(fixPrintPages, 350);
     const observer = new MutationObserver(scheduleFix);
     observer.observe(document.body, { childList: true, subtree: true });
-    window.addEventListener('hashchange', () => setTimeout(fixPrintPages, 300));
+    window.addEventListener('hashchange', () => setTimeout(fixPrintPages, 350));
     window.addEventListener('beforeprint', fixPrintPages);
-    setInterval(fixPrintPages, 2000);
+    setInterval(fixPrintPages, 2500);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
