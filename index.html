@@ -6,10 +6,32 @@
   <title>Examon Academic Planner</title>
   <meta name="description" content="Study plan generator for Examon Education" />
   <link rel="icon" href="assets/examon-logo.webp" />
-  <link rel="stylesheet" href="stable-styles.css?v=3" />
+  <link rel="stylesheet" href="stable-styles.css?v=4" />
 </head>
 <body>
   <div id="app"><div style="font-family:Arial,sans-serif;max-width:760px;margin:60px auto;padding:24px">Loading Examon Academic Planner…</div></div>
-  <script src="stable-app.js?v=3"></script>
+  <script>
+    (async function(){
+      const app = document.getElementById('app');
+      try {
+        let code = await fetch('stable-app.js?v=4', {cache:'no-store'}).then(r => {
+          if (!r.ok) throw new Error('stable-app.js failed to load: ' + r.status);
+          return r.text();
+        });
+        code = code.replace(
+          "let state=load(),draft=blankDraft(),editingSubject=null,editingFaculty=null;",
+          "var state;let draft=blankDraft(),editingSubject=null,editingFaculty=null;state=load();"
+        );
+        code = code.replace(
+          "function sub(id){return state.subjects.find(s=>s.id===id)||SUBJECTS.find(s=>s.id===id)} function fac(id){return state.faculty.find(f=>f.id===id)||FACULTY.find(f=>f.id===id)||{name:id}}",
+          "function sub(id){const ss=(state&&state.subjects)||SUBJECTS;return ss.find(s=>s.id===id)||SUBJECTS.find(s=>s.id===id)} function fac(id){const ff=(state&&state.faculty)||FACULTY;return ff.find(f=>f.id===id)||FACULTY.find(f=>f.id===id)||{name:id}}"
+        );
+        new Function(code)();
+      } catch (err) {
+        console.error(err);
+        app.innerHTML = '<div style="font-family:Arial,sans-serif;max-width:760px;margin:60px auto;padding:28px;background:#fff;border-radius:16px"><h1>Unable to load Examon Academic Planner</h1><p>'+String(err.message||err)+'</p><button onclick="localStorage.removeItem(\'examonPlannerStableV2\');location.reload()" style="padding:12px 18px;border-radius:10px;border:0;background:#18c0c7;font-weight:700">Reset App Data & Reload</button></div>';
+      }
+    })();
+  </script>
 </body>
 </html>
