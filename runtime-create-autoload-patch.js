@@ -95,6 +95,24 @@
       "const added = addAllSelectedFacultySubjectsToDraft(true);\n      normalizeDraftFaculty();\n      persistNow();\n      render();\n      toastSafe(added ? (added + ' subject(s) loaded from selected faculty') : 'Faculty updated. Imported subjects kept.');"
     );
 
+    // 4) Add per-study-plan faculty checkboxes inside Subject Priority & Time.
+    code = code.replace(
+      '<div class="assigned-faculty"><span>Assigned faculty</span><b>${esc(facultyNames(m.facultyIds))}</b></div>',
+      '<div class="assigned-faculty"><span>Assigned faculty</span><b>${esc(facultyNames(m.facultyIds))}</b></div><div class="module-faculty-picker"><span>Change faculty for this study plan only</span><div class="module-faculty-checks">${state.faculty.filter(f=>f.active).map(f=>`<label class="mini-check"><input type="checkbox" class="m-faculty-check" value="${f.id}" ${(m.facultyIds||[]).includes(f.id)?\'checked\':\'\'}><em>${esc(f.name)}</em></label>`).join(\'\')}</div></div>'
+    );
+
+    // 5) syncDraft previously reset module faculty from Subject Master every time. Prefer checked faculty when present.
+    code = code.replace(
+      "if(sub){const mapped=(sub.facultyIds||[]).filter(fid=>!selected.size||selected.has(fid));m.facultyIds=mapped.length?mapped:[...(sub.facultyIds||[])]}m.category=$('.m-cat',el).value;",
+      "const picked=$$('.m-faculty-check:checked',el).map(c=>c.value);if(picked.length){m.facultyIds=picked}else if(sub){const mapped=(sub.facultyIds||[]).filter(fid=>!selected.size||selected.has(fid));m.facultyIds=mapped.length?mapped:[...(sub.facultyIds||[])]}m.category=$('.m-cat',el).value;"
+    );
+
+    // 6) Small CSS for the new checkbox area, injected in the app bundle safely.
+    code = code.replace(
+      "function currentRoute(){const h=location.hash.replace(/^#\\/?/,'');return h||'dashboard'}",
+      "function currentRoute(){const h=location.hash.replace(/^#\\/?/,'');return h||'dashboard'}\n(function(){if(document.getElementById('per-plan-faculty-css'))return;const st=document.createElement('style');st.id='per-plan-faculty-css';st.textContent='.module-faculty-picker{margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#f4fbfb}.module-faculty-picker>span{display:block;font-size:12px;color:var(--muted);margin-bottom:8px}.module-faculty-checks{display:flex;flex-wrap:wrap;gap:8px}.mini-check{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:#fff;cursor:pointer;font-size:12px}.mini-check input{width:14px;height:14px;accent-color:#18c6c8}.mini-check em{font-style:normal;font-weight:700;color:#11324b}';document.head.appendChild(st)})();"
+    );
+
     return code;
   }
 
