@@ -1,5 +1,5 @@
 async function loadText(path) {
-  const response = await fetch(`/${path}?v=9`, { cache: 'no-store' });
+  const response = await fetch(`/${path}?v=10`, { cache: 'no-store' });
   if (!response.ok) throw new Error(`Failed to load ${path}: ${response.status}`);
   return response.text();
 }
@@ -47,6 +47,7 @@ function examonRuntimePatch() {
   function canonical(name) { return aliases[normalize(name)] || name; }
   function idFor(name) { return 's-' + normalize(name).replace(/\s+/g, '-'); }
   function bySubjectName(name) { return (state.subjects || []).find(s => normalize(s.name) === normalize(canonical(name))); }
+  function bySubjectId(id) { return (state.subjects || []).find(s => s.id === id); }
   function ensureSubject(name, facultyIds, branch = 'Non-Tech', category = 'Non-Technical Theory', technical = false) {
     const fixed = canonical(name);
     let subject = bySubjectName(fixed);
@@ -64,6 +65,11 @@ function examonRuntimePatch() {
     if (mandatoryMap[fixed]) return unique(mandatoryMap[fixed]);
     const subject = bySubjectName(fixed);
     return unique(subject && subject.facultyIds && subject.facultyIds.length ? subject.facultyIds : fallback);
+  }
+  function idsForModule(m) {
+    const subject = (m && m.subjectId && bySubjectId(m.subjectId)) || bySubjectName(m && m.subjectName);
+    if (subject && subject.facultyIds && subject.facultyIds.length) return unique(subject.facultyIds);
+    return idsForSubject(m && m.subjectName, (m && m.facultyIds) || []);
   }
   function toastSafe(message) {
     try { toast(message); return; } catch (_) {}
@@ -94,6 +100,20 @@ function examonRuntimePatch() {
     Object.entries(mandatoryMap).forEach(([name, ids]) => ensureSubject(name, ids));
   }
 
+  function refreshModuleFaculty(container) {
+    (container.modules || []).forEach(m => {
+      m.subjectName = canonical(m.subjectName);
+      m.facultyIds = idsForModule(m);
+    });
+  }
+
+  function normalizeDraftFaculty() {
+    if (typeof draft === 'undefined' || !draft) return;
+    draft.modules = draft.modules || [];
+    refreshModuleFaculty(draft);
+    draft.selectedFacultyIds = unique([...(draft.selectedFacultyIds || []), ...draft.modules.flatMap(m => m.facultyIds || [])]);
+  }
+
   function applyMappingsEverywhere() {
     if (!state) return;
     state.settings = state.settings || {};
@@ -120,11 +140,10 @@ function examonRuntimePatch() {
     if (typeof draft !== 'undefined' && draft) containers.push(draft);
     containers.forEach(container => {
       if (container.planType) container.planType = canonical(container.planType);
-      (container.modules || []).forEach(m => {
-        m.subjectName = canonical(m.subjectName);
-        m.facultyIds = idsForSubject(m.subjectName, m.facultyIds);
-      });
-      if (Array.isArray(container.selectedFacultyIds)) container.selectedFacultyIds = unique((container.modules || []).flatMap(m => m.facultyIds || []));
+      refreshModuleFaculty(container);
+      if (Array.isArray(container.selectedFacultyIds)) {
+        container.selectedFacultyIds = unique([...(container.selectedFacultyIds || []), ...(container.modules || []).flatMap(m => m.facultyIds || [])]);
+      }
     });
     (state.plans || []).forEach(p => (p.sessions || []).forEach(s => {
       s.subjectName = canonical(s.subjectName);
@@ -182,8 +201,68 @@ function examonRuntimePatch() {
     }
   }
 
+  function handleRollingImportClick(ev) {
+    if (!String(location.hash || '').includes('/create')) return false;
+    const importButton = ev.target.closest && ev.target.closest('#rolling-import');
+    if (!importButton) return false;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    try {
+      if (typeof syncDraft === 'function') syncDraft();
+      if (typeof draft === 'undefined' || !draft) return toastSafe('App data not ready. Refresh once.');
+      const select = document.querySelector('#rolling-source');
+      const id = select && select.value;
+      if (!id) return toastSafe('Choose a previous study plan');
+      const source = (state.plans || []).find(p => p.id === id);
+      if (!source || typeof importRollingPlan !== 'function') return toastSafe('Previous batch not found');
+      const previousFaculty = unique(draft.selectedFacultyIds || []);
+      const startDate = draft.startDate;
+      draft = importRollingPlan(source, startDate);
+      draft.batchName = '';
+      normalizeDraftFaculty();
+      draft.selectedFacultyIds = unique([...previousFaculty, ...(draft.selectedFacultyIds || [])]);
+      persistNow();
+      render();
+      toastSafe('Imported. Now you can add faculty and subjects.');
+    } catch (e) {
+      console.error('Rolling import failed', e);
+      toastSafe('Import failed. Refresh and try again.');
+    }
+    return true;
+  }
+
+  function handleFacultyCardClick(ev) {
+    if (!String(location.hash || '').includes('/create')) return false;
+    const card = ev.target.closest && ev.target.closest('.faculty-select-card');
+    if (!card) return false;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    try {
+      if (typeof syncDraft === 'function') syncDraft();
+      if (typeof draft === 'undefined' || !draft) return toastSafe('App data not ready. Refresh once.');
+      const id = card.dataset.fid;
+      draft.selectedFacultyIds = unique(draft.selectedFacultyIds || []);
+      if (draft.selectedFacultyIds.includes(id)) {
+        draft.selectedFacultyIds = draft.selectedFacultyIds.filter(x => x !== id);
+      } else {
+        draft.selectedFacultyIds.push(id);
+      }
+      normalizeDraftFaculty();
+      persistNow();
+      render();
+      toastSafe('Faculty updated. Imported subjects kept.');
+    } catch (e) {
+      console.error('Faculty selection failed', e);
+      toastSafe('Faculty update failed. Refresh and try again.');
+    }
+    return true;
+  }
+
   function installHandlers() {
     document.addEventListener('click', ev => {
+      if (handleRollingImportClick(ev)) return;
+      if (handleFacultyCardClick(ev)) return;
+
       const btn = ev.target.closest && ev.target.closest('[data-delete-plan]');
       if (btn) { ev.preventDefault(); ev.stopPropagation(); deletePlan(btn.dataset.deletePlan); return; }
       const text = (ev.target && ev.target.textContent || '').trim().toLowerCase();
