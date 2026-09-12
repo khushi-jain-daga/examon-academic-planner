@@ -1,6 +1,6 @@
 /* Runtime code patch loaded before loader.js.
    Purpose: Create page must show/load every subject associated with selected faculty,
-   across Mechanical/Civil/Non-Tech, without editing fragile bundled chunks. */
+   across Mechanical/Civil/Non-Tech, with safe per-plan faculty editing and exact rolling import. */
 (function () {
   if (window.__EXAMON_RUNTIME_CREATE_AUTOLOAD_PATCH__) return;
   window.__EXAMON_RUNTIME_CREATE_AUTOLOAD_PATCH__ = true;
@@ -16,7 +16,20 @@
       "const eligibleSubjects=state.subjects.filter(s=>s.active && (!selectedFacultySet.size || (s.facultyIds||[]).some(fid=>selectedFacultySet.has(fid))));"
     );
 
-    // 2) Add helper inside examonRuntimePatch so it can access lexical state/draft/uid.
+    // 2) Replace rolling import: exact copy previous batch modules + sessions + dates + times + faculty.
+    var oldImport = "function importRollingPlan(source,newStart){\n  const d=blankDraft();\n  d.examName=source.examName; d.branch=source.branch; d.planType=source.planType; d.contentFlags=[...(source.contentFlags||[])];\n  d.startDate=newStart||iso(new Date()); d.selectedFacultyIds=[...new Set(source.modules.flatMap(m=>m.facultyIds||[]))];\n  const grouped={};\n  source.modules.forEach(m=>(grouped[m.track||'Track A']??=[]).push(m));\n  d.modules=[];\n  Object.entries(grouped).forEach(([track,mods])=>{\n    const live=[],completed=[];\n    mods.forEach(m=>{\n      const w=moduleWindow(source,m.id);\n      const c={...deep(m),id:uid('mod'),customStart:'',startMode:'auto',weekendOverride:false};\n      if(w.end && w.end<d.startDate) completed.push(c); else live.push(c);\n    });\n    const ordered=[...live,...completed];\n    ordered.forEach((m,i)=>{m.priority=i+1;m.track=track;d.modules.push(m)});\n  });\n  return d;\n}";
+    var newImport = "function importRollingPlan(source,newStart){\n  const d=blankDraft();\n  const firstSessionDate=(source.sessions||[]).map(s=>s.date).sort()[0]||source.startDate||newStart||iso(new Date());\n  d.examName=source.examName||'';\n  d.batchName=(source.batchName||'')+' Copy';\n  d.branch=source.branch||'Mechanical';\n  d.planType=source.planType||'Foundation';\n  d.contentFlags=[...(source.contentFlags||[])];\n  d.startDate=source.startDate||firstSessionDate;\n  d.targetEndDate=source.targetEndDate||'';\n  d.examDate=source.examDate||'';\n  d.defaultDuration=source.defaultDuration||60;\n  d.workingDays=[...(source.workingDays||DEFAULT_DAYS)];\n  d.status='Draft';\n  d.version=1;\n  d.theme=source.theme||d.theme;\n  const idMap={};\n  d.modules=(source.modules||[]).map(m=>{\n    const oldId=m.id; const newId=uid('mod'); idMap[oldId]=newId;\n    const w=moduleWindow(source,oldId);\n    return {...deep(m),id:newId,startMode:'custom',customStart:w.start||m.customStart||d.startDate,workingDays:[...(m.workingDays||DEFAULT_DAYS)],weekendOverride:!!m.weekendOverride};\n  });\n  d.sessions=(source.sessions||[]).map(s=>({...deep(s),id:uid('ses'),moduleId:idMap[s.moduleId]||s.moduleId,locked:false}));\n  d.selectedFacultyIds=[...new Set(d.modules.flatMap(m=>m.facultyIds||[]))];\n  d.createdAt=new Date().toISOString();\n  d.updatedAt=new Date().toISOString();\n  return d;\n}";
+    if (code.indexOf(oldImport) !== -1) code = code.replace(oldImport, newImport);
+    code = code.replace(
+      "draft=importRollingPlan(src,draft.startDate);draft.batchName='';toast('Previous batch imported. Completed subjects moved to the end.');render()",
+      "draft=importRollingPlan(src,draft.startDate);toast('Previous batch imported with all modules, classes, dates, times and faculty.');render()"
+    );
+    code = code.replace(
+      "draft=importRollingPlan(src,start);draft.batchName=prompt('New batch name',src.batchName.replace(/(1\\.0|2\\.0|3\\.0)/,'2.0')+' - New')||src.batchName+' - New';toast('Rolling batch prepared. Completed subjects moved to the end.');go('create')",
+      "draft=importRollingPlan(src,start);draft.batchName=prompt('New batch name',draft.batchName)||draft.batchName;toast('Rolling batch copied with all classes, dates, times and faculty.');go('create')"
+    );
+
+    // 3) Add helper inside examonRuntimePatch so it can access lexical state/draft/uid.
     var helper = `
 
   function subjectLinkedToFaculty(subject, facultyId) {
@@ -84,7 +97,7 @@
       code = code.replace('  function installRenderHook() {', helper + '\n  function installRenderHook() {');
     }
 
-    // 3) Auto-load once before rendering Create page, and again when faculty cards are clicked.
+    // 4) Auto-load once before rendering Create page, and again when faculty cards are clicked.
     code = code.replace(
       "render = function () { applyMappingsEverywhere(); const result = originalRender.apply(this, arguments); setTimeout(injectDeleteButtons, 0); return result; };",
       "render = function () { applyMappingsEverywhere(); try { addAllSelectedFacultySubjectsToDraft(false); } catch (_) {} const result = originalRender.apply(this, arguments); setTimeout(injectDeleteButtons, 0); return result; };"
@@ -95,19 +108,19 @@
       "const added = addAllSelectedFacultySubjectsToDraft(true);\n      normalizeDraftFaculty();\n      persistNow();\n      render();\n      toastSafe(added ? (added + ' subject(s) loaded from selected faculty') : 'Faculty updated. Imported subjects kept.');"
     );
 
-    // 4) Add per-study-plan faculty checkboxes inside Subject Priority & Time.
+    // 5) Add per-study-plan faculty checkboxes inside Subject Priority & Time.
     code = code.replace(
       '<div class="assigned-faculty"><span>Assigned faculty</span><b>${esc(facultyNames(m.facultyIds))}</b></div>',
       '<div class="assigned-faculty"><span>Assigned faculty</span><b>${esc(facultyNames(m.facultyIds))}</b></div><div class="module-faculty-picker"><span>Change faculty for this study plan only</span><div class="module-faculty-checks">${state.faculty.filter(f=>f.active).map(f=>`<label class="mini-check"><input type="checkbox" class="m-faculty-check" value="${f.id}" ${(m.facultyIds||[]).includes(f.id)?\'checked\':\'\'}><em>${esc(f.name)}</em></label>`).join(\'\')}</div></div>'
     );
 
-    // 5) syncDraft previously reset module faculty from Subject Master every time. Prefer checked faculty when present.
+    // 6) syncDraft previously reset module faculty from Subject Master every time. Prefer checked faculty when present.
     code = code.replace(
       "if(sub){const mapped=(sub.facultyIds||[]).filter(fid=>!selected.size||selected.has(fid));m.facultyIds=mapped.length?mapped:[...(sub.facultyIds||[])]}m.category=$('.m-cat',el).value;",
       "const picked=$$('.m-faculty-check:checked',el).map(c=>c.value);if(picked.length){m.facultyIds=picked}else if(sub){const mapped=(sub.facultyIds||[]).filter(fid=>!selected.size||selected.has(fid));m.facultyIds=mapped.length?mapped:[...(sub.facultyIds||[])]}m.category=$('.m-cat',el).value;"
     );
 
-    // 6) Small CSS for the new checkbox area, injected in the app bundle safely.
+    // 7) Small CSS for the new checkbox area, injected in the app bundle safely.
     code = code.replace(
       "function currentRoute(){const h=location.hash.replace(/^#\\/?/,'');return h||'dashboard'}",
       "function currentRoute(){const h=location.hash.replace(/^#\\/?/,'');return h||'dashboard'}\n(function(){if(document.getElementById('per-plan-faculty-css'))return;const st=document.createElement('style');st.id='per-plan-faculty-css';st.textContent='.module-faculty-picker{margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#f4fbfb}.module-faculty-picker>span{display:block;font-size:12px;color:var(--muted);margin-bottom:8px}.module-faculty-checks{display:flex;flex-wrap:wrap;gap:8px}.mini-check{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:#fff;cursor:pointer;font-size:12px}.mini-check input{width:14px;height:14px;accent-color:#18c6c8}.mini-check em{font-style:normal;font-weight:700;color:#11324b}';document.head.appendChild(st)})();"
