@@ -1,4 +1,4 @@
-/* Subject page: replace broken multi-select with real faculty checkboxes and save mapping reliably. */
+/* Subject page: real faculty checkboxes and reliable save for subject defaults. */
 (function () {
   const STORAGE_KEY = 'examonAcademicPlannerV1';
 
@@ -11,6 +11,9 @@
   }
   function norm(v) {
     return String(v || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   }
   function toast(message) {
     const old = document.querySelector('[data-subject-checkbox-toast]');
@@ -43,16 +46,17 @@
   }
   function findEditModal() {
     const headings = Array.from(document.querySelectorAll('h1,h2,h3,.modal-title'));
-    const heading = headings.find(h => /edit subject/i.test(h.textContent || ''));
+    const heading = headings.find(h => /edit subject|add subject/i.test(h.textContent || ''));
     if (!heading) return null;
     return heading.closest('.modal,.dialog,.card,section,div') || heading.parentElement;
   }
   function findSubjectName(modal) {
-    const inputs = Array.from(modal.querySelectorAll('input'));
-    const input = inputs.find(i => i.value && i.type !== 'hidden');
+    const input = modal.querySelector('#sm-name') || Array.from(modal.querySelectorAll('input')).find(i => i.value && i.type !== 'hidden');
     return input ? input.value.trim() : '';
   }
   function findFacultySelect(modal) {
+    const direct = modal.querySelector('#sm-fac');
+    if (direct) return direct;
     const selects = Array.from(modal.querySelectorAll('select'));
     return selects.find(s => s.size > 1 || s.multiple || Array.from(s.options || []).some(o => /sir|ma.am|ma’am|mam/i.test(o.textContent || '')));
   }
@@ -86,12 +90,16 @@
       const checked = selectedIds.has(f.id) ? 'checked' : '';
       const label = facultyLabel(f);
       const sub = Array.isArray(f.domains) ? f.domains.join(', ') : (f.domains || '');
-      return `<label class="subject-faculty-check"><input type="checkbox" value="${String(f.id).replace(/"/g, '&quot;')}" ${checked}> <span><b>${String(label).replace(/</g,'&lt;')}</b>${sub ? `<small>${String(sub).replace(/</g,'&lt;')}</small>` : ''}</span></label>`;
+      return `<label class="subject-faculty-check"><input type="checkbox" value="${esc(f.id)}" ${checked}> <span><b>${esc(label)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span></label>`;
     }).join('');
     select.parentElement.insertBefore(box, select.nextSibling);
     box.addEventListener('change', () => setSelectFromChecks(box, select));
     setSelectFromChecks(box, select);
     modal.dataset.subjectFacultyCheckboxReady = '1';
+  }
+  function val(modal, selector, fallback = '') {
+    const el = modal.querySelector(selector);
+    return el ? el.value : fallback;
   }
   function saveSubjectFromCheckboxes(modal) {
     const box = modal.querySelector('.subject-faculty-checkbox-box');
@@ -101,13 +109,23 @@
     if (select) setSelectFromChecks(box, select);
 
     const state = readState();
+    state.subjects = state.subjects || [];
     const selected = Array.from(box.querySelectorAll('input[type="checkbox"]:checked')).map(i => i.value);
     let subject = subjectByName(state, subjectName);
     if (!subject) {
-      subject = { id: 's-' + norm(subjectName).replace(/\s+/g, '-'), name: subjectName, branch: 'Non-Tech', technical: false, category: 'Non-Technical Theory', facultyIds: [], duration: 60, active: true };
-      state.subjects = state.subjects || [];
+      subject = { id: 's-' + norm(subjectName).replace(/\s+/g, '-'), name: subjectName, branch: 'Mechanical', technical: true, category: 'Technical Theory', facultyIds: [], duration: 60, active: true };
       state.subjects.push(subject);
     }
+
+    subject.name = subjectName;
+    subject.branch = val(modal, '#sm-branch', subject.branch || 'Mechanical');
+    subject.category = val(modal, '#sm-cat', subject.category || 'Technical Theory');
+    subject.technical = String(subject.category || '').startsWith('Technical');
+    subject.duration = Number(val(modal, '#sm-duration', subject.duration || 60)) || 60;
+    subject.defaultStart = val(modal, '#sm-start', subject.defaultStart || '');
+    subject.defaultTime = val(modal, '#sm-time', subject.defaultTime || '');
+    subject.defaultClasses = Number(val(modal, '#sm-classes', subject.defaultClasses || 10)) || 10;
+    subject.defaultTrack = val(modal, '#sm-track', subject.defaultTrack || 'Track A') || 'Track A';
     subject.facultyIds = selected;
 
     // Keep faculty master in sync: add/remove this subject name from faculty subject lists.
@@ -117,17 +135,24 @@
       f.subjects = selected.includes(f.id) ? [...without, subject.name] : without;
     });
 
-    // Reflect updated faculty in all templates, saved plans, and sessions.
-    const updateModule = m => { if (m && norm(m.subjectName || m.name) === norm(subject.name)) m.facultyIds = selected.slice(); };
-    (state.templates || []).forEach(t => (t.modules || []).forEach(updateModule));
+    // Do not overwrite per-plan custom faculty/date/time. Only backfill missing fields.
+    const backfillModule = m => {
+      if (!m || norm(m.subjectName || m.name) !== norm(subject.name)) return;
+      m.subjectId = m.subjectId || subject.id;
+      if (!m.facultyIds || !m.facultyIds.length) m.facultyIds = selected.slice();
+      if (!m.startTime && subject.defaultTime) m.startTime = subject.defaultTime;
+      if (!m.customStart && subject.defaultStart) { m.customStart = subject.defaultStart; m.startMode = 'custom'; }
+      if ((!m.classes || m.classes === 10) && subject.defaultClasses) m.classes = subject.defaultClasses;
+      if ((!m.track || m.track === 'Track A') && subject.defaultTrack) m.track = subject.defaultTrack;
+    };
+    (state.templates || []).forEach(t => (t.modules || []).forEach(backfillModule));
     (state.plans || []).forEach(p => {
-      (p.modules || []).forEach(updateModule);
-      (p.sessions || []).forEach(s => { if (norm(s.subjectName) === norm(subject.name)) s.facultyIds = selected.slice(); });
+      (p.modules || []).forEach(backfillModule);
       p.selectedFacultyIds = Array.from(new Set((p.modules || []).flatMap(m => m.facultyIds || [])));
     });
 
     writeState(state);
-    toast('Subject faculty saved');
+    toast('Subject defaults saved');
     setTimeout(() => location.reload(), 350);
     return true;
   }
