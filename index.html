@@ -7,7 +7,7 @@
   <meta name="description" content="Study plan generator for Examon Education" />
   <link rel="icon" href="assets/examon-logo.webp" />
   <link rel="stylesheet" href="stable-styles.css?v=7" />
-  <link rel="stylesheet" href="ui-pdf-fixes.css?v=6" />
+  <link rel="stylesheet" href="ui-pdf-fixes.css?v=7" />
 </head>
 <body>
   <div id="app"><div style="font-family:Arial,sans-serif;max-width:760px;margin:60px auto;padding:24px">Loading Examon Academic Planner…</div></div>
@@ -58,12 +58,6 @@
           "<td><a class=\"btn primary\" href=\"#/plans/${p.id}\">Open</a> <button class=\"btn danger\" data-delete-plan=\"${p.id}\">Delete</button></td>",
           "<td class=\"row-actions\"><a class=\"btn primary\" href=\"#/plans/${p.id}\">Open</a><button class=\"btn\" data-edit-plan=\"${p.id}\">Edit</button><button class=\"btn danger\" data-delete-plan=\"${p.id}\">Delete</button></td>"
         );
-        code = code.replace("for(let i=0;i<ss.length;i+=24)chunks.push(ss.slice(i,i+24));", "for(let i=0;i<ss.length;i+=18)chunks.push(ss.slice(i,i+18));");
-        code = code.replace("Sessions ${i*24+1}–${i*24+rows.length} of ${total}", "Sessions ${i*18+1}–${i*18+rows.length} of ${total}");
-        code = code.replace(/<b>\$\{p\.sessions\.length\}<\/b>/g,"<b>${p.sourceTotals?.total||p.sessions.length}</b>");
-        code = code.replace(/<b>\$\{sum\.total\}<\/b>/g,"<b>${p.sourceTotals?.total||sum.total}</b>");
-        code = code.replace(/<b>\$\{sum\.tech\}<\/b>/g,"<b>${p.sourceTotals?.tech||sum.tech}</b>");
-        code = code.replace(/<b>\$\{sum\.non\}<\/b>/g,"<b>${p.sourceTotals?.non||sum.non}</b>");
         new Function(code)();
       } catch (err) {
         console.error(err);
