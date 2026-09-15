@@ -7,11 +7,11 @@
   <meta name="description" content="Study plan generator for Examon Education" />
   <link rel="icon" href="assets/examon-logo.webp" />
   <link rel="stylesheet" href="stable-styles.css?v=7" />
-  <link rel="stylesheet" href="ui-pdf-fixes.css?v=3" />
+  <link rel="stylesheet" href="ui-pdf-fixes.css?v=4" />
 </head>
 <body>
   <div id="app"><div style="font-family:Arial,sans-serif;max-width:760px;margin:60px auto;padding:24px">Loading Examon Academic Planner…</div></div>
-  <script src="source-plans-seed.js?v=1"></script>
+  <script src="source-plans-seed.js?v=2"></script>
   <script>
     (async function(){
       const app = document.getElementById('app');
@@ -28,6 +28,16 @@
           "function sub(id){return state.subjects.find(s=>s.id===id)||SUBJECTS.find(s=>s.id===id)} function fac(id){return state.faculty.find(f=>f.id===id)||FACULTY.find(f=>f.id===id)||{name:id}}",
           "function sub(id){const ss=(state&&state.subjects)||SUBJECTS;return ss.find(s=>s.id===id)||SUBJECTS.find(s=>s.id===id)} function fac(id){const ff=(state&&state.faculty)||FACULTY;return ff.find(f=>f.id===id)||FACULTY.find(f=>f.id===id)||{name:id}}"
         );
+        code = code.replace(
+          "function summary(mods){let ss=sessions(mods),uniq=[...new Set(ss.map(s=>s.date))];return{total:ss.length,tech:ss.filter(s=>s.category.includes('Technical')&&!s.category.includes('Non-')).length,non:ss.filter(s=>s.category.includes('Non-')).length,active:uniq.length,start:ss[0]?.date||'',end:ss.at(-1)?.date||'',fac:[...new Set(mods.flatMap(m=>m.facultyIds||[]))].length}}",
+          "function summary(mods){let ss=sessions(mods),live=ss.filter(s=>s.date!=='Recorded'),uniq=[...new Set(live.map(s=>s.date))];const isNon=s=>String(s.category||'').toLowerCase().includes('non');const isTech=s=>!isNon(s)&&(String(s.category||'').toLowerCase().includes('tech')||String(s.subjectName||'').toLowerCase().includes('engineering')||String(s.subjectName||'').toLowerCase().includes('mechanic'));return{total:ss.length,tech:ss.filter(isTech).length,non:ss.filter(isNon).length,active:uniq.length,start:live[0]?.date||ss[0]?.date||'',end:live.at(-1)?.date||ss.at(-1)?.date||'',fac:[...new Set((mods||[]).flatMap(m=>m.facultyIds||[]))].length}}"
+        );
+        code = code.replace(
+          "<div><button class=\"btn primary\" data-edit-plan=\"${p.id}\">Edit in Creator</button> <a class=\"btn gold\" href=\"#/print/${p.id}\">Print / Save PDF</a></div>",
+          "<div class=\"plan-actions\"><button class=\"btn primary\" data-edit-plan=\"${p.id}\">Edit in Creator</button><a class=\"btn gold\" href=\"#/print/${p.id}\">Print / Save PDF</a></div>"
+        );
+        code = code.replace("for(let i=0;i<ss.length;i+=24)chunks.push(ss.slice(i,i+24));", "for(let i=0;i<ss.length;i+=18)chunks.push(ss.slice(i,i+18));");
+        code = code.replace("Sessions ${i*24+1}–${i*24+rows.length} of ${total}", "Sessions ${i*18+1}–${i*18+rows.length} of ${total}");
         new Function(code)();
       } catch (err) {
         console.error(err);
