@@ -11,7 +11,8 @@
 </head>
 <body>
   <div id="app"><div style="font-family:Arial,sans-serif;max-width:760px;margin:60px auto;padding:24px">Loading Examon Academic Planner…</div></div>
-  <script src="source-plans-seed.js?v=2"></script>
+  <script src="source-plans-seed.js?v=3"></script>
+  <script src="source-seed-corrections.js?v=1"></script>
   <script>
     (async function(){
       const app = document.getElementById('app');
@@ -38,6 +39,10 @@
         );
         code = code.replace("for(let i=0;i<ss.length;i+=24)chunks.push(ss.slice(i,i+24));", "for(let i=0;i<ss.length;i+=18)chunks.push(ss.slice(i,i+18));");
         code = code.replace("Sessions ${i*24+1}–${i*24+rows.length} of ${total}", "Sessions ${i*18+1}–${i*18+rows.length} of ${total}");
+        code = code.replace(/<b>\$\{p\.sessions\.length\}<\/b>/g,"<b>${p.sourceTotals?.total||p.sessions.length}</b>");
+        code = code.replace(/<b>\$\{sum\.total\}<\/b>/g,"<b>${p.sourceTotals?.total||sum.total}</b>");
+        code = code.replace(/<b>\$\{sum\.tech\}<\/b>/g,"<b>${p.sourceTotals?.tech||sum.tech}</b>");
+        code = code.replace(/<b>\$\{sum\.non\}<\/b>/g,"<b>${p.sourceTotals?.non||sum.non}</b>");
         new Function(code)();
       } catch (err) {
         console.error(err);
