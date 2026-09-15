@@ -11,13 +11,13 @@
 </head>
 <body>
   <div id="app"><div style="font-family:Arial,sans-serif;max-width:760px;margin:60px auto;padding:24px">Loading Examon Academic Planner…</div></div>
-  <script src="source-plans-seed.js?v=4"></script>
-  <script src="source-seed-corrections.js?v=2"></script>
+  <script src="source-plans-seed.js?v=5"></script>
+  <script src="source-seed-corrections.js?v=3"></script>
   <script>
     (async function(){
       const app = document.getElementById('app');
       try {
-        let code = await fetch('stable-app.js?v=8', {cache:'no-store'}).then(r => {
+        let code = await fetch('stable-app.js?v=9', {cache:'no-store'}).then(r => {
           if (!r.ok) throw new Error('stable-app.js failed to load: ' + r.status);
           return r.text();
         });
@@ -30,6 +30,10 @@
           "function sub(id){const ss=(state&&state.subjects)||SUBJECTS;return ss.find(s=>s.id===id)||SUBJECTS.find(s=>s.id===id)} function fac(id){const ff=(state&&state.faculty)||FACULTY;return ff.find(f=>f.id===id)||FACULTY.find(f=>f.id===id)||{name:id}}"
         );
         code = code.replace(
+          "function defaultDraft(){let d=blankDraft();d.selectedFacultyIds=['f-gaurav','f-shivam','f-amrit','f-anjna','f-joshit'];d.modules=PDF_DEFAULT_IDS.map((id,i)=>moduleFromSubject(sub(id),{priority:i+1}));return d;}",
+          "function defaultDraft(){let base=(state&&state.plans||[]).find(p=>p.id==='plan-rrb-raj')||(state&&state.plans||[])[0];if(base){let mods=cleanModules(base.modules||[]).map((m,i)=>({...m,id:uid('mod'),priority:m.priority||i+1,customStart:m.customStart||m.startDate,startTime:m.startTime||m.time||'10:00'}));return{...blankDraft(),examName:base.examName,batchName:base.batchName,branch:base.branch,planType:base.planType,startDate:base.startDate,selectedFacultyIds:[...new Set(mods.flatMap(m=>m.facultyIds||[]))],modules:mods};}let d=blankDraft();d.selectedFacultyIds=['f-gaurav','f-shivam','f-amrit','f-anjna','f-joshit'];d.modules=PDF_DEFAULT_IDS.map((id,i)=>moduleFromSubject(sub(id),{priority:i+1}));return d;}"
+        );
+        code = code.replace(
           "function sessions(mods){let out=[];cleanModules(mods).forEach(m=>{dates(m.customStart,m.classes).forEach((date,i)=>out.push({moduleId:m.id,subjectId:m.subjectId,subjectName:m.subjectName,topic:m.subjectName+' - '+(i+1),category:m.category,facultyIds:m.facultyIds,time:m.startTime,date,day:day(date),n:i+1}))});return out.sort((a,b)=>a.date.localeCompare(b.date)||min(a.time)-min(b.time)||a.subjectName.localeCompare(b.subjectName))}",
           "function sessions(mods){let out=[];function dBetween(start,end,count){let a=[],c=start,g=0;while(a.length<count&&g++<900){if(isWork(c))a.push(c);if(end&&c>=end)break;c=addDays(c,1)}while(a.length<count){c=a.length?addDays(a[a.length-1],1):start;if(isWork(c))a.push(c)}if(end&&a.length) a[a.length-1]=end;return a.slice(0,count)}cleanModules(mods).forEach(m=>{let ds=m.endDate?dBetween(m.customStart||m.startDate,m.endDate,m.classes):dates(m.customStart,m.classes);ds.forEach((date,i)=>out.push({moduleId:m.id,subjectId:m.subjectId,subjectName:m.subjectName,topic:(m.topicPrefix?m.topicPrefix:m.subjectName)+' - '+(i+1),category:m.category,facultyIds:m.facultyIds,time:m.startTime,date,day:day(date),n:i+1}))});return out.sort((a,b)=>a.date.localeCompare(b.date)||min(a.time)-min(b.time)||a.subjectName.localeCompare(b.subjectName))}"
         );
@@ -39,7 +43,7 @@
         );
         code = code.replace(
           "function makePlan(d){let mods=cleanModules(d.modules),sum=summary(mods);return{id:uid('plan'),examName:d.examName,batchName:d.batchName,branch:d.branch,planType:d.planType,startDate:sum.start||d.startDate,endDate:sum.end,status:'Draft',modules:mods,sessions:sessions(mods),createdAt:new Date().toISOString()}}",
-          "function makePlan(d){let mods=cleanModules(d.modules),sum=summary(mods);return{id:d.id||uid('plan'),examName:d.examName,batchName:d.batchName,branch:d.branch,planType:d.planType,startDate:sum.start||d.startDate,endDate:sum.end,status:d.status||'Draft',modules:mods,sessions:sessions(mods),createdAt:d.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),sourceTotals:d.sourceTotals}}"
+          "function makePlan(d){let mods=cleanModules(d.modules),sum=summary(mods);return{id:d.id||uid('plan'),examName:d.examName,batchName:d.batchName,branch:d.branch,planType:d.planType,startDate:sum.start||d.startDate,endDate:sum.end,status:d.status||'Draft',modules:mods,sessions:sessions(mods),createdAt:d.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()}}"
         );
         code = code.replace(
           "<div><button class=\"btn primary\" data-edit-plan=\"${p.id}\">Edit in Creator</button> <a class=\"btn gold\" href=\"#/print/${p.id}\">Print / Save PDF</a></div>",
