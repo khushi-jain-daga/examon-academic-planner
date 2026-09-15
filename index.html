@@ -6,15 +6,16 @@
   <title>Examon Academic Planner</title>
   <meta name="description" content="Study plan generator for Examon Education" />
   <link rel="icon" href="assets/examon-logo.webp" />
-  <link rel="stylesheet" href="stable-styles.css?v=4" />
+  <link rel="stylesheet" href="stable-styles.css?v=7" />
 </head>
 <body>
   <div id="app"><div style="font-family:Arial,sans-serif;max-width:760px;margin:60px auto;padding:24px">Loading Examon Academic Planner…</div></div>
+  <script src="source-plans-seed.js?v=1"></script>
   <script>
     (async function(){
       const app = document.getElementById('app');
       try {
-        let code = await fetch('stable-app.js?v=4', {cache:'no-store'}).then(r => {
+        let code = await fetch('stable-app.js?v=7', {cache:'no-store'}).then(r => {
           if (!r.ok) throw new Error('stable-app.js failed to load: ' + r.status);
           return r.text();
         });
