@@ -7,24 +7,28 @@
   <meta name="description" content="Study plan generator for Examon Education" />
   <link rel="icon" href="assets/examon-logo.webp" />
   <link rel="stylesheet" href="stable-styles.css?v=7" />
-  <link rel="stylesheet" href="ui-pdf-fixes.css?v=5" />
+  <link rel="stylesheet" href="ui-pdf-fixes.css?v=6" />
 </head>
 <body>
   <div id="app"><div style="font-family:Arial,sans-serif;max-width:760px;margin:60px auto;padding:24px">Loading Examon Academic Planner…</div></div>
   <script src="source-plans-seed.js?v=5"></script>
   <script src="source-seed-corrections.js?v=3"></script>
-  <script src="extra-source-plans-seed.js?v=1"></script>
+  <script src="extra-source-plans-seed.js?v=2"></script>
   <script>
     (async function(){
       const app = document.getElementById('app');
       try {
-        let code = await fetch('stable-app.js?v=9', {cache:'no-store'}).then(r => {
+        let code = await fetch('stable-app.js?v=10', {cache:'no-store'}).then(r => {
           if (!r.ok) throw new Error('stable-app.js failed to load: ' + r.status);
           return r.text();
         });
         code = code.replace(
           "let state=load(),draft=blankDraft(),editingSubject=null,editingFaculty=null;",
           "var state;let draft=blankDraft(),editingSubject=null,editingFaculty=null;state=load();"
+        );
+        code = code.replace(
+          "if(x&&x.version===2)return x",
+          "if(x&&Number(x.version)>=2)return x"
         );
         code = code.replace(
           "function sub(id){return state.subjects.find(s=>s.id===id)||SUBJECTS.find(s=>s.id===id)} function fac(id){return state.faculty.find(f=>f.id===id)||FACULTY.find(f=>f.id===id)||{name:id}}",
